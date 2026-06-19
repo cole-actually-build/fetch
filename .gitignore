@@ -1,0 +1,9 @@
+/fetch
+/bin/
+*.duckdb
+*.duckdb.wal
+/data/
+.DS_Store
+
+# subagent-driven-development scratch (briefs, reports, progress ledger)
+/.superpowers/
