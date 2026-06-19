@@ -1,7 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"os"
+
+	"github.com/cole/fetch/internal/cli"
+)
 
 func main() {
-	fmt.Println("fetch — agentic web research pipelines (foundation build)")
+	os.Exit(cli.Run(os.Args[1:], os.Stdout, os.Stderr))
 }
