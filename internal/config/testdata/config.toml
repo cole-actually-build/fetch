@@ -1,0 +1,12 @@
+data_dir = "/tmp/fetch-test"
+
+[models]
+interview = "gpt-oss:20b"
+extract = "qwen3-coder:latest"
+
+[ollama]
+base_url = "http://localhost:9999"
+
+[search]
+provider = "tavily"
+max_results = 8
