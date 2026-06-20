@@ -1,5 +1,5 @@
 // Package cli is the thin command-line entry point for fetch. v1 supports
-// `fetch run <pipeline.json> [--input k=v ...]`.
+// `fetch run <pipeline.json> [--input k=v ...]` and `fetch create`.
 package cli
 
 import (
@@ -21,16 +21,18 @@ import (
 	"github.com/cole/fetch/internal/providers/fetch"
 	"github.com/cole/fetch/internal/providers/search"
 	"github.com/cole/fetch/internal/providers/store"
+	"github.com/cole/fetch/internal/replanner"
 )
 
 const usage = `fetch — agentic web research pipelines
 
 Usage:
+  fetch create
   fetch run <pipeline.json> [--input key=value ...]
 `
 
 // Run dispatches a CLI invocation and returns a process exit code.
-func Run(args []string, stdout, stderr io.Writer) int {
+func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
 		return 2
@@ -38,6 +40,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "run":
 		return runPipeline(args[1:], stdout, stderr)
+	case "create":
+		return createPipeline(args[1:], stdin, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usage)
 		return 2
@@ -91,6 +95,7 @@ func runPipeline(args []string, stdout, stderr io.Writer) int {
 		Fetcher:   fetch.NewHTTP(cfg.Fetch.UserAgent, cfg.Fetch.TimeoutSeconds, cfg.Fetch.MaxBytes),
 		Artifacts: artifacts.NewDisk(defaultArtifactDir(cfg)),
 		Store:     rowStore,
+		Replanner: replanner.New(agent.NewOllama(cfg.Ollama.BaseURL, http.DefaultClient), cfg),
 	})
 
 	res, err := e.Run(context.Background(), p, input, nil)
