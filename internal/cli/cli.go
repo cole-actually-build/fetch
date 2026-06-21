@@ -1,5 +1,5 @@
 // Package cli is the thin command-line entry point for fetch. v1 supports
-// `fetch run <pipeline.json> [--input k=v ...]` and `fetch create`.
+// `fetch run <pipeline.json> [--input k=v ...]`, `fetch create`, and `fetch` (TUI).
 package cli
 
 import (
@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/cole/fetch/internal/agent"
+	"github.com/cole/fetch/internal/builder"
 	"github.com/cole/fetch/internal/config"
 	"github.com/cole/fetch/internal/core"
 	"github.com/cole/fetch/internal/engine"
@@ -22,11 +23,13 @@ import (
 	"github.com/cole/fetch/internal/providers/search"
 	"github.com/cole/fetch/internal/providers/store"
 	"github.com/cole/fetch/internal/replanner"
+	"github.com/cole/fetch/internal/tui"
 )
 
 const usage = `fetch — agentic web research pipelines
 
 Usage:
+  fetch                 launch the TUI
   fetch create
   fetch run <pipeline.json> [--input key=value ...]
 `
@@ -34,8 +37,7 @@ Usage:
 // Run dispatches a CLI invocation and returns a process exit code.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
-		return 2
+		return launchTUI(stderr)
 	}
 	switch args[0] {
 	case "run":
@@ -46,6 +48,51 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usage)
 		return 2
 	}
+}
+
+func launchTUI(stderr io.Writer) int {
+	cfg, err := config.Load(defaultConfigPath())
+	if err != nil {
+		fmt.Fprintf(stderr, "warning: config: %v (using defaults)\n", err)
+	}
+	rowStore, err := store.OpenDuckDB(defaultDBPath(cfg))
+	if err != nil {
+		fmt.Fprintf(stderr, "error: open db: %v\n", err)
+		return 1
+	}
+	defer rowStore.Close()
+
+	repo := pipeline.NewRepository(cfg.DataDir)
+	deps := tui.Deps{
+		Cfg:   cfg,
+		Repo:  repo,
+		Store: rowStore,
+		NewSession: func() tui.Session {
+			return builder.NewSession(builder.SessionDeps{
+				LLM:   agent.NewOllama(cfg.Ollama.BaseURL, http.DefaultClient),
+				Cfg:   cfg,
+				Store: rowStore,
+				Repo:  repo,
+			})
+		},
+		NewEngine: func() tui.EngineRunner {
+			return engine.New(engine.Deps{
+				Config:    cfg,
+				LLM:       agent.NewOllama(cfg.Ollama.BaseURL, http.DefaultClient),
+				Search:    search.NewTavily(cfg.Search.BaseURL, cfg.APIKey(), http.DefaultClient),
+				Fetcher:   fetch.NewHTTP(cfg.Fetch.UserAgent, cfg.Fetch.TimeoutSeconds, cfg.Fetch.MaxBytes),
+				Artifacts: artifacts.NewDisk(defaultArtifactDir(cfg)),
+				Store:     rowStore,
+				Replanner: replanner.New(agent.NewOllama(cfg.Ollama.BaseURL, http.DefaultClient), cfg),
+				Repo:      repo,
+			})
+		},
+	}
+	if err := tui.Run(deps); err != nil {
+		fmt.Fprintf(stderr, "error: tui: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func runPipeline(args []string, stdout, stderr io.Writer) int {
