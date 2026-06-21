@@ -99,3 +99,40 @@ func TestSanitizeRejectsInjection(t *testing.T) {
 		t.Fatalf("append sanitized: %v", err)
 	}
 }
+
+func TestDuckDBReadMethods(t *testing.T) {
+	d, err := OpenDuckDB(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	fields := []core.Field{{Name: "title", Type: core.FieldString}, {Name: "rank", Type: core.FieldInt}}
+	if err := d.EnsureTable(ctx, "p1", fields); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	if err := d.RecordRun(ctx, core.Run{ID: "r1", PipelineID: "p1", Input: map[string]any{"q": "x"}, Status: core.RunOK, StartedAt: now, FinishedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AppendRows(ctx, "p1", fields, "r1", []map[string]any{{"title": "A", "rank": 1}, {"title": "B", "rank": 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RecordTrace(ctx, core.StepTrace{RunID: "r1", StepID: "s1", Status: "ok", OutputSummary: "2 rows", ArtifactRefs: []string{"a/b"}, Tokens: 7, FallbackUsed: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := d.ListRuns(ctx, "p1")
+	if err != nil || len(runs) != 1 || runs[0].ID != "r1" || runs[0].Status != core.RunOK || runs[0].Input["q"] != "x" {
+		t.Fatalf("ListRuns = %+v err=%v", runs, err)
+	}
+	rows, err := d.ResultRows(ctx, "p1", "r1")
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("ResultRows len=%d err=%v", len(rows), err)
+	}
+	traces, err := d.RunTraces(ctx, "r1")
+	if err != nil || len(traces) != 1 || traces[0].StepID != "s1" || !traces[0].FallbackUsed || traces[0].Tokens != 7 || len(traces[0].ArtifactRefs) != 1 {
+		t.Fatalf("RunTraces = %+v err=%v", traces, err)
+	}
+}

@@ -34,3 +34,23 @@ func TestFakeStoreAppendAndRecord(t *testing.T) {
 		t.Fatalf("runs=%d traces=%d", len(fs.Runs), len(fs.Traces))
 	}
 }
+
+func TestFakeStoreReadMethods(t *testing.T) {
+	fs := NewFakeStore()
+	ctx := context.Background()
+	_ = fs.EnsureTable(ctx, "p1", []core.Field{{Name: "title", Type: core.FieldString}})
+	_ = fs.RecordRun(ctx, core.Run{ID: "r1", PipelineID: "p1", Status: core.RunOK})
+	_ = fs.RecordRun(ctx, core.Run{ID: "r2", PipelineID: "other", Status: core.RunOK})
+	_ = fs.AppendRows(ctx, "p1", nil, "r1", []map[string]any{{"title": "A"}})
+	_ = fs.RecordTrace(ctx, core.StepTrace{RunID: "r1", StepID: "s1"})
+
+	if runs, _ := fs.ListRuns(ctx, "p1"); len(runs) != 1 || runs[0].ID != "r1" {
+		t.Fatalf("ListRuns = %+v", runs)
+	}
+	if rows, _ := fs.ResultRows(ctx, "p1", "r1"); len(rows) != 1 || rows[0]["title"] != "A" {
+		t.Fatalf("ResultRows = %+v", rows)
+	}
+	if tr, _ := fs.RunTraces(ctx, "r1"); len(tr) != 1 || tr[0].StepID != "s1" {
+		t.Fatalf("RunTraces = %+v", tr)
+	}
+}

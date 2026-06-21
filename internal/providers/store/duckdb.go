@@ -196,3 +196,80 @@ func (d *DuckDB) RecordTrace(ctx context.Context, t core.StepTrace) error {
 	)
 	return err
 }
+
+func (d *DuckDB) ListRuns(ctx context.Context, pipelineID string) ([]core.Run, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT id, pipeline_id, input::VARCHAR, status, started_at, finished_at
+		 FROM runs WHERE pipeline_id = ? ORDER BY started_at DESC`, pipelineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.Run
+	for rows.Next() {
+		var r core.Run
+		var inputJSON, status string
+		if err := rows.Scan(&r.ID, &r.PipelineID, &inputJSON, &status, &r.StartedAt, &r.FinishedAt); err != nil {
+			return nil, err
+		}
+		r.Status = core.RunStatus(status)
+		if inputJSON != "" {
+			_ = json.Unmarshal([]byte(inputJSON), &r.Input)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (d *DuckDB) ResultRows(ctx context.Context, pipelineID string, runID string) ([]map[string]any, error) {
+	q := fmt.Sprintf("SELECT * FROM %s WHERE __run_id = ?", d.tableName(pipelineID))
+	rows, err := d.db.QueryContext(ctx, q, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []map[string]any
+	for rows.Next() {
+		vals := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		m := make(map[string]any, len(cols))
+		for i, c := range cols {
+			m[c] = vals[i]
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (d *DuckDB) RunTraces(ctx context.Context, runID string) ([]core.StepTrace, error) {
+	rows, err := d.db.QueryContext(ctx,
+		`SELECT run_id, step_id, status, input_summary, output_summary, artifact_refs::VARCHAR, tokens, error, fallback_used
+		 FROM step_traces WHERE run_id = ?`, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.StepTrace
+	for rows.Next() {
+		var t core.StepTrace
+		var refsJSON string
+		if err := rows.Scan(&t.RunID, &t.StepID, &t.Status, &t.InputSummary, &t.OutputSummary, &refsJSON, &t.Tokens, &t.Error, &t.FallbackUsed); err != nil {
+			return nil, err
+		}
+		if refsJSON != "" {
+			_ = json.Unmarshal([]byte(refsJSON), &t.ArtifactRefs)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}

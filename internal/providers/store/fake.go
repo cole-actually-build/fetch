@@ -64,4 +64,40 @@ func (f *FakeStore) RecordTrace(_ context.Context, t core.StepTrace) error {
 	return nil
 }
 
+func (f *FakeStore) ListRuns(_ context.Context, pipelineID string) ([]core.Run, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []core.Run
+	for i := len(f.Runs) - 1; i >= 0; i-- {
+		if f.Runs[i].PipelineID == pipelineID {
+			out = append(out, f.Runs[i])
+		}
+	}
+	return out, nil
+}
+
+func (f *FakeStore) ResultRows(_ context.Context, pipelineID string, runID string) ([]map[string]any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []map[string]any
+	for _, row := range f.Rows[pipelineID] {
+		if row["__run_id"] == runID {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+func (f *FakeStore) RunTraces(_ context.Context, runID string) ([]core.StepTrace, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []core.StepTrace
+	for _, t := range f.Traces {
+		if t.RunID == runID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
 func (f *FakeStore) Close() error { return nil }

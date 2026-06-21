@@ -14,5 +14,8 @@ type Store interface {
 	Query(ctx context.Context, query string) ([]map[string]any, error)
 	RecordRun(ctx context.Context, r core.Run) error
 	RecordTrace(ctx context.Context, t core.StepTrace) error
+	ListRuns(ctx context.Context, pipelineID string) ([]core.Run, error)
+	ResultRows(ctx context.Context, pipelineID string, runID string) ([]map[string]any, error)
+	RunTraces(ctx context.Context, runID string) ([]core.StepTrace, error)
 	Close() error
 }
