@@ -44,9 +44,24 @@ func newCreateModel(svc services) createModel {
 	return createModel{svc: svc, input: ti, chat: vp, phase: phaseGoal}
 }
 
+// chatContent word-wraps each transcript line to the chat pane width so long
+// agent questions wrap instead of being truncated by the viewport.
+func (m createModel) chatContent() string {
+	w := m.chat.Width
+	if w < 4 {
+		w = 4
+	}
+	style := lipgloss.NewStyle().Width(w)
+	wrapped := make([]string, len(m.log))
+	for i, l := range m.log {
+		wrapped[i] = style.Render(l)
+	}
+	return strings.Join(wrapped, "\n")
+}
+
 func (m createModel) appendChat(line string) createModel {
 	m.log = append(m.log, line)
-	m.chat.SetContent(strings.Join(m.log, "\n"))
+	m.chat.SetContent(m.chatContent())
 	m.chat.GotoBottom()
 	return m
 }
@@ -59,6 +74,9 @@ func (m createModel) update(msg tea.Msg) (createModel, tea.Cmd) {
 		if msg.Height > 6 {
 			m.chat.Height = msg.Height - 6
 		}
+		// re-wrap existing transcript to the new width
+		m.chat.SetContent(m.chatContent())
+		m.chat.GotoBottom()
 		return m, nil
 
 	case replyMsg:

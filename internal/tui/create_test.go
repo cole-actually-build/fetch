@@ -5,10 +5,34 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/cole/fetch/internal/builder"
 	"github.com/cole/fetch/internal/core"
 )
+
+func TestCreateChatWrapsLongLines(t *testing.T) {
+	m := newCreateModel(services{})
+	m, _ = m.update(tea.WindowSizeMsg{Width: 80, Height: 24}) // chat width = 38
+	long := "agent: Which website or data source should the pipeline scrape the fantasy statistics from such as ESPN or Yahoo or Pro Football Reference"
+	m = m.appendChat(long)
+
+	content := m.chatContent()
+	lines := strings.Split(content, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("long line should wrap onto multiple lines, got %d", len(lines))
+	}
+	for _, ln := range lines {
+		if lipgloss.Width(ln) > m.chat.Width {
+			t.Fatalf("wrapped line exceeds pane width %d: visible=%d", m.chat.Width, lipgloss.Width(ln))
+		}
+	}
+	for _, w := range strings.Fields(long) {
+		if !strings.Contains(content, w) {
+			t.Fatalf("wrapping dropped the word %q (truncation, not wrap)", w)
+		}
+	}
+}
 
 func newCreateTestModel(fs *fakeSession) createModel {
 	svc := services{newSession: func() Session { return fs }}

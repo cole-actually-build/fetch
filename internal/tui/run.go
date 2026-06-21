@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/cole/fetch/internal/core"
 	"github.com/cole/fetch/internal/engine"
@@ -122,9 +123,24 @@ func (m runModel) startRun() (runModel, tea.Cmd) {
 	return m, waitEvent(m.events)
 }
 
+// logContent word-wraps each run-log line to the viewport width so long event
+// messages wrap instead of being truncated.
+func (m runModel) logContent() string {
+	w := m.logVP.Width
+	if w < 4 {
+		w = 4
+	}
+	style := lipgloss.NewStyle().Width(w)
+	wrapped := make([]string, len(m.log))
+	for i, l := range m.log {
+		wrapped[i] = style.Render(l)
+	}
+	return strings.Join(wrapped, "\n")
+}
+
 func (m runModel) appendLog(line string) runModel {
 	m.log = append(m.log, line)
-	m.logVP.SetContent(strings.Join(m.log, "\n"))
+	m.logVP.SetContent(m.logContent())
 	m.logVP.GotoBottom()
 	return m
 }
@@ -137,6 +153,8 @@ func (m runModel) update(msg tea.Msg) (runModel, tea.Cmd) {
 		if msg.Height > 6 {
 			m.logVP.Height = msg.Height - 6
 		}
+		m.logVP.SetContent(m.logContent())
+		m.logVP.GotoBottom()
 		return m, nil
 
 	case eventMsg:
