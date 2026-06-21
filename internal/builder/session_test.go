@@ -95,6 +95,24 @@ func TestSessionRedraft(t *testing.T) {
 	}
 }
 
+func TestSessionFactsGetter(t *testing.T) {
+	llm := &agent.FakeLLM{Responses: []agent.ChatResponse{
+		{Content: `{"question":"What format?","ready":false,"facts":{"domain":"truck-parts","inputs":[{"name":"part","type":"string","required":true,"description":"p"}],"output_fields":[{"name":"x","type":"string","description":"d"}],"source_hints":["rockauto.com"]}}`},
+	}}
+	s := NewSession(SessionDeps{LLM: llm, Cfg: config.Default(), Store: store.NewFakeStore(), Repo: pipeline.NewRepository(t.TempDir())})
+	s.Start("truck parts")
+	if got := s.Facts(); got.Domain != "" {
+		t.Fatalf("facts before any turn should be empty, got %+v", got)
+	}
+	if _, _, err := s.Reply(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	f := s.Facts()
+	if f.Domain != "truck-parts" || len(f.Inputs) != 1 || f.Inputs[0].Name != "part" || len(f.OutputFields) != 1 || len(f.SourceHints) != 1 {
+		t.Fatalf("Facts() = %+v", f)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{"Truck Cross Ref": "truck-cross-ref", "  A/B  ": "a-b", "": "pipeline"}
 	for in, want := range cases {

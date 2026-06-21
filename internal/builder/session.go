@@ -73,6 +73,12 @@ func (s *CreateSession) Start(goal string) {
 	s.state = InterviewState{Goal: goal}
 }
 
+// Facts returns the interview's accumulated structured understanding so far.
+// It is a read-only snapshot, updated on each Reply.
+func (s *CreateSession) Facts() Facts {
+	return s.state.Facts
+}
+
 // Reply feeds an optional user message and runs one interview turn.
 func (s *CreateSession) Reply(ctx context.Context, msg string) (string, bool, error) {
 	if msg != "" {
