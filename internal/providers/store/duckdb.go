@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cole/fetch/internal/core"
@@ -19,7 +21,13 @@ type DuckDB struct {
 }
 
 // OpenDuckDB opens (creating if needed) the database and ensures meta tables.
+// The parent directory is created if missing; DuckDB itself will not create it.
 func OpenDuckDB(path string) (*DuckDB, error) {
+	if path != "" && path != ":memory:" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return nil, err
+		}
+	}
 	db, err := sql.Open("duckdb", path)
 	if err != nil {
 		return nil, err

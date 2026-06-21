@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -134,5 +135,18 @@ func TestDuckDBReadMethods(t *testing.T) {
 	traces, err := d.RunTraces(ctx, "r1")
 	if err != nil || len(traces) != 1 || traces[0].StepID != "s1" || !traces[0].FallbackUsed || traces[0].Tokens != 7 || len(traces[0].ArtifactRefs) != 1 {
 		t.Fatalf("RunTraces = %+v err=%v", traces, err)
+	}
+}
+
+func TestOpenDuckDBCreatesParentDir(t *testing.T) {
+	// nested path whose parent dirs do not exist yet
+	path := filepath.Join(t.TempDir(), "a", "b", "fetch.duckdb")
+	d, err := OpenDuckDB(path)
+	if err != nil {
+		t.Fatalf("OpenDuckDB should create the parent dir: %v", err)
+	}
+	defer d.Close()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("db file not created: %v", err)
 	}
 }
